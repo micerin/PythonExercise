@@ -1,6 +1,6 @@
 Python practice records with version 2.7
 ------
-Just record those function, lib I have tried:
+Just record those functions and libs I have used:
 
 1)urllib <br>
 2)json <br>
