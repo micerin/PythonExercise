@@ -1,13 +1,12 @@
 #encoding=utf8
 import urllib2
-import urllib
-import json
 import re
 import csv
 import string
 import time
 
-urlTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=%s&rs=&gs=0&sc=zzf&st=desc&sd=%s&ed=%s&qdii=&tabSubtype=,,,,,&pi=1&pn=%s&dx=1'
+urlTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?' \
+          'op=ph&dt=kf&ft=%s&rs=&gs=0&sc=zzf&st=desc&sd=%s&ed=%s&qdii=&tabSubtype=,,,,,&pi=1&pn=%s&dx=1'
 re_strforfund = r'(\"[^\"]+\"[,]?)'
 re_pat = re.compile(re_strforfund)
 
@@ -145,7 +144,8 @@ meetnum = 0
 for i in range(0, len(fundInfoListOrdered2)):
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     fundlink = fundlinkTemp % fundInfoListOrdered2[i].fundcode
-    print '   %s %s 净值：%s 近三个月：%.3f 两年数据：%s' % (fundlink , fundInfoListOrdered2[i].name, fundInfoListOrdered2[i].latestvalue, string.atof(fundInfoListOrdered2[i].threemonthdelta), fundInfoListOrdered2[i].twoyeardelta)
+    print '   %s %s 净值：%s 近三个月：%.3f 两年数据：%s' % (fundlink , fundInfoListOrdered2[i].name, fundInfoListOrdered2[i].latestvalue,
+                                                string.atof(fundInfoListOrdered2[i].threemonthdelta), fundInfoListOrdered2[i].twoyeardelta)
     meetnum +=1
     if meetnum == topNum:
         break
@@ -173,10 +173,10 @@ fundInfoListOrdered3 = sorted(fundInfoList3, key=lambda fund:string.atof(fund.we
 meetnum = 0
 for i in range(0, len(fundInfoListOrdered3)):
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
-    #print '%s %s 净值：%s 权重：%s' % (fundInfoListOrdered3[i].fundcode , fundInfoListOrdered3[i].name, fundInfoListOrdered3[i].latestvalue, fundInfoListOrdered3[i].weighted)
     if isHighlyRanked(fundInfoListOrdered3[i].fundcode):
         fundlink = fundlinkTemp % fundInfoListOrdered3[i].fundcode
-        print '   %s %s 净值：%s 权重：%s' % (fundlink , fundInfoListOrdered3[i].name, fundInfoListOrdered3[i].latestvalue, fundInfoListOrdered3[i].weighted)
+        print '   %s %s 净值：%s 权重：%s' % (fundlink , fundInfoListOrdered3[i].name,
+                                        fundInfoListOrdered3[i].latestvalue, fundInfoListOrdered3[i].weighted)
         meetnum +=1
     if meetnum == topNum:
         break
