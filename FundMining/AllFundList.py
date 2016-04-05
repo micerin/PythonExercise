@@ -5,6 +5,7 @@ import re
 import csv
 import string
 import time
+import datetime
 import BeautifulSoup
 
 urlTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?' \
@@ -92,7 +93,7 @@ def saveAsCsv(flist, file):
         result = []
     csvfiletowrite.close()
 
-#Check fund rank >=4
+#Check latest fund rank >=4
 def isHighlyRanked(foudcode):
     rankUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=grade&code=%s&page=1&per=1'
     rankUrl = rankUrlTemp % foudcode
@@ -100,6 +101,31 @@ def isHighlyRanked(foudcode):
     if '\'4\'' in content or '\'5\'' in content:
         return True
     return False
+
+#Get manager perf for given fund item
+def getManagerPerf(funditem):
+    jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
+    jjjllink = jjjllinkTemp % funditem.fundcode
+    try:
+        soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
+    except:
+        soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
+    table = soup.find('table', attrs={'class':'w782 comm jlchg'})
+    if len(table.contents[1].contents) > 0:
+        funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
+        #print table.contents[1].contents[0].contents[0].contents[0]
+    else:
+        try: # retry once
+            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
+        except:
+            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
+        table = soup.find('table', attrs={'class':'w782 comm jlchg'})
+        if len(table.contents[1].contents) > 0:
+            funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
+        else: #might due to no manager change, get fromstartup
+            funditem.managerperf = funditem.fromstartup
+            #funditem.managerperf = '0' #default 0
+    return funditem
 
 #Analysis patterns
 def pattern1(fundinfolist):
@@ -173,30 +199,9 @@ def pattern3(fundinfolist):
 
 def pattern4(fundinfolist4):
     #Check fund manager perf
-    print 'Fund list 4: 基于三的结果，排序当前基金经理业绩(待补充没有变换的情况，当前设定为0)'
+    print 'Fund list 4: 基于pattern3的结果，排序当前基金经理业绩'
     for funditem in fundinfolist4:
-        jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
-        jjjllink = jjjllinkTemp % funditem.fundcode
-        try:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
-        except:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
-        table = soup.find('table', attrs={'class':'w782 comm jlchg'})
-        if len(table.contents[1].contents) > 0:
-            funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
-            #print table.contents[1].contents[0].contents[0].contents[0]
-            #print table.contents[1].contents[0].contents[3].contents[0]
-            #print table.contents[1].contents[0].contents[4].contents[0]
-        else:
-            try: # retry once
-                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
-            except:
-                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
-            table = soup.find('table', attrs={'class':'w782 comm jlchg'})
-            if len(table.contents[1].contents) > 0:
-                funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
-            else:
-                funditem.managerperf = '0'
+        funditem = getManagerPerf(funditem)
 
     fundInfoListOrdered4 = sorted(fundinfolist4, key=lambda fund:string.atof(fund.managerperf),reverse=True)
     meetnum = 0
@@ -213,14 +218,13 @@ def pattern4(fundinfolist4):
 
 #Parameters
 typeFilter = 'hh' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
-sTime = '2015-04-03'
 
-now = int(time.time())
-timeArray = time.localtime(now)
-eTime = time.strftime("%Y-%m-%d", timeArray)#'2016-04-03'
+sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
+sTime = sDate.strftime("%Y-%m-%d")
+eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
 num = 10000 #Max number fund to load(10000 for all funds)
-topNum = 30 #Top funds to print out
+topNum = 10 #Top funds to print out
 filecsv = 'funds.csv'
 filters = (typeFilter, sTime, eTime, num)
 
