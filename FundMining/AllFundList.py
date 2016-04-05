@@ -45,6 +45,7 @@ def parseFundList(content):
     print '%d funds for %s in total' % (len(flist),typeFilter)
     #saveAsCsv(flist, filecsv) # save all fund info to csv file
 
+    fundinfolist = []
     for i in range(0,len(flist)):
         isplits = string.split(flist[i], ',')
         if(len(isplits) > 0):
@@ -64,13 +65,14 @@ def parseFundList(content):
             fund.thisyear = isplits[14]
             fund.fromstartup = isplits[15]
             fund.starttime = isplits[16]
-            fundInfoList.append(fund)
+            fundinfolist.append(fund)
 
     #get overall data for all funds, all kinds
     #re_strforall = r'allNum:(.*),gpNum:(.*),hhNum:(.*),zqNum:(.*),zsNum:(.*),bbNum:(.*),qdiiNum:(.*),etfNum:(.*),lofNum:(.*)'
     #re_patforall = re.compile(re_strforall)
     index = string.index(content, 'allNum:')
     print content[index:-2]
+    return fundinfolist
 
 #Save fund items to csv file
 def saveAsCsv(flist, file):
@@ -100,7 +102,7 @@ def isHighlyRanked(foudcode):
     return False
 
 #Analysis patterns
-def pattern1():
+def pattern1(fundinfolist):
     print 'Fund list 1: 净值最高'
     def passed1(fund):
         try:
@@ -108,14 +110,14 @@ def pattern1():
             return True
         except:
             return False
-    fundInfoList1 = filter(passed1, fundInfoList)
+    fundInfoList1 = filter(passed1, fundinfolist)
     fundInfoListOrdered1 = sorted(fundInfoList1,key=lambda fund:string.atof(fund.latestvalue), reverse=True)
     for i in range(0,topNum - 1):
         fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
         fundlink = fundlinkTemp % fundInfoListOrdered1[i].fundcode
         print '   %s %s %.3f' % (fundlink , fundInfoListOrdered1[i].name, string.atof(fundInfoListOrdered1[i].latestvalue))
 
-def pattern2():
+def pattern2(fundinfolist):
     print 'Fund list 2: 最近3个月增长最快，并且成立两年以上'
     def passed2(fund):
         try:
@@ -124,7 +126,7 @@ def pattern2():
             return True
         except:
             return False
-    fundInfoList2 = filter(passed2, fundInfoList)
+    fundInfoList2 = filter(passed2, fundinfolist)
     fundInfoListOrdered2 = sorted(fundInfoList2, key=lambda fund:string.atof(fund.threemonthdelta),reverse=True)
     meetnum = 0
     for i in range(0, len(fundInfoListOrdered2)):
@@ -136,7 +138,7 @@ def pattern2():
         if meetnum == topNum:
             break
 
-def pattern3():
+def pattern3(fundinfolist):
     print 'Fund list 3: 权重 0.65*近半年 + 0.3*近一年 + 0.05*近两年, 且评级大于等于4星'
     weight= 0
     def passed3(fund):
@@ -148,7 +150,7 @@ def pattern3():
         except:
             return False
 
-    fundInfoList3 = filter(passed3, fundInfoList)
+    fundInfoList3 = filter(passed3, fundinfolist)
     for item in fundInfoList3:
         item.weighted = string.atof(item.halfyeardelta)* 0.65 + string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
         #for zq
@@ -167,9 +169,12 @@ def pattern3():
         if meetnum == topNum:
             break
 
+    return fundInfoList4
+
+def pattern4(fundinfolist4):
     #Check fund manager perf
-    print 'Fund list 4: 在3的基础上，排序当前基金经理业绩(待补充没有变换的情况，当前设定为0)'
-    for funditem in fundInfoList4:
+    print 'Fund list 4: 基于三的结果，排序当前基金经理业绩(待补充没有变换的情况，当前设定为0)'
+    for funditem in fundinfolist4:
         jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
         jjjllink = jjjllinkTemp % funditem.fundcode
         try:
@@ -193,12 +198,12 @@ def pattern3():
             else:
                 funditem.managerperf = '0'
 
-    fundInfoListOrdered4 = sorted(fundInfoList4, key=lambda fund:string.atof(fund.managerperf),reverse=True)
+    fundInfoListOrdered4 = sorted(fundinfolist4, key=lambda fund:string.atof(fund.managerperf),reverse=True)
     meetnum = 0
     for i in range(0, len(fundInfoListOrdered4)):
         fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
         if isHighlyRanked(fundInfoListOrdered4[i].fundcode):
-            fundInfoList4.append(fundInfoListOrdered4[i])
+            fundinfolist4.append(fundInfoListOrdered4[i])
             fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
             print '   %s %s 净值：%s 业绩：%s' % (fundlink , fundInfoListOrdered4[i].name,
                                             fundInfoListOrdered4[i].latestvalue, fundInfoListOrdered4[i].managerperf.encode('utf-8'))
@@ -218,16 +223,16 @@ num = 10000 #Max number fund to load(10000 for all funds)
 topNum = 30 #Top funds to print out
 filecsv = 'funds.csv'
 filters = (typeFilter, sTime, eTime, num)
-fundInfoList = []
 
 #Main calls
 print '-------Start Analysis-------'
 
 listcontent = getFundList(filters)
-parseFundList(listcontent)
+fundInfoList = parseFundList(listcontent)
 
-#pattern1()
-#pattern2()
-pattern3()
+#pattern1(fundInfoList)
+#pattern2(fundInfoList)
+fundinfolist4 = pattern3(fundInfoList)
+pattern4(fundinfolist4) #pattern4 is based on pattern3
 print '-------Analysis Completed-------'
 
