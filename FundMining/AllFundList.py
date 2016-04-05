@@ -31,8 +31,11 @@ class Fund:
         self.thisyear = ''
         self.fromstartup = ''
         self.starttime = ''
+
+        #customized properties
         self.weighted = ''
         self.managerperf = ''
+        self.managerduration = ''
 
 #Get fund list per filter
 def getFundList(filter):
@@ -106,25 +109,25 @@ def isHighlyRanked(foudcode):
 def getManagerPerf(funditem):
     jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
     jjjllink = jjjllinkTemp % funditem.fundcode
-    try:
-        soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
-    except:
-        soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
-    table = soup.find('table', attrs={'class':'w782 comm jlchg'})
-    if len(table.contents[1].contents) > 0:
-        funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
-        #print table.contents[1].contents[0].contents[0].contents[0]
-    else:
-        try: # retry once
+    i = 0
+    retrytimes= 10
+    for i in range(0,retrytimes):#retry 4 times at most since sometimes the page load return null result...
+        try:
             soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
         except:
             soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
         table = soup.find('table', attrs={'class':'w782 comm jlchg'})
         if len(table.contents[1].contents) > 0:
             funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
-        else: #might due to no manager change, get fromstartup
-            funditem.managerperf = funditem.fromstartup
-            #funditem.managerperf = '0' #default 0
+            funditem.managerduration = table.contents[1].contents[0].contents[3].contents[0]
+            #print table.contents[1].contents[0].contents[0].contents[0]
+            break
+        i+=1
+
+    if i == retrytimes:#hit here after retrytimes times try, should indicate no manager change, get fromstartup
+        funditem.managerperf = funditem.fromstartup
+        funditem.managerduration = 'start @' + funditem.starttime
+        #funditem.managerperf = '0' #default 0
     return funditem
 
 #Analysis patterns
@@ -165,20 +168,22 @@ def pattern2(fundinfolist):
             break
 
 def pattern3(fundinfolist):
-    print 'Fund list 3: 权重 0.65*近半年 + 0.3*近一年 + 0.05*近两年, 且评级大于等于4星'
+    print 'Fund list 3: 权重 0.2*近3个月 + 0.45*近半年 + 0.3*近一年 + 0.05*近两年, 且评级大于等于4星'
     weight= 0
     def passed3(fund):
         try:
             string.atof(fund.halfyeardelta)
             string.atof(fund.yeardelta)
             string.atof(fund.twoyeardelta)
+            string.atof(fund.threemonthdelta)
             return True
         except:
             return False
 
     fundInfoList3 = filter(passed3, fundinfolist)
     for item in fundInfoList3:
-        item.weighted = string.atof(item.halfyeardelta)* 0.65 + string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
+        item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 + \
+                        string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
         #for zq
         #item.weighted = string.atof(item.halfyeardelta)* 0.3 + string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.3
     fundInfoListOrdered3 = sorted(fundInfoList3, key=lambda fund:string.atof(fund.weighted),reverse=True)
@@ -197,7 +202,7 @@ def pattern3(fundinfolist):
 
     return fundInfoList4
 
-def pattern4(fundinfolist4):
+def pattern4(fundinfolist4, maxreturn):
     #Check fund manager perf
     print 'Fund list 4: 基于pattern3的结果，排序当前基金经理业绩'
     for funditem in fundinfolist4:
@@ -207,13 +212,17 @@ def pattern4(fundinfolist4):
     meetnum = 0
     for i in range(0, len(fundInfoListOrdered4)):
         fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
+        jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
         if isHighlyRanked(fundInfoListOrdered4[i].fundcode):
             fundinfolist4.append(fundInfoListOrdered4[i])
             fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
-            print '   %s %s 净值：%s 业绩：%s' % (fundlink , fundInfoListOrdered4[i].name,
-                                            fundInfoListOrdered4[i].latestvalue, fundInfoListOrdered4[i].managerperf.encode('utf-8'))
+            jjjllink = jjjllinkTemp % fundInfoListOrdered4[i].fundcode
+            print '   %s %s %s 净值：%s 业绩：%s Duration:%s' % (fundlink, jjjllink, fundInfoListOrdered4[i].name,
+                                                           fundInfoListOrdered4[i].latestvalue,
+                                                           fundInfoListOrdered4[i].managerperf.encode('utf-8'),
+                                                           fundInfoListOrdered4[i].managerduration.encode('utf-8'))
             meetnum +=1
-        if meetnum == topNum/2:
+        if meetnum == maxreturn:
             break
 
 #Parameters
@@ -224,7 +233,7 @@ sTime = sDate.strftime("%Y-%m-%d")
 eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
 num = 10000 #Max number fund to load(10000 for all funds)
-topNum = 10 #Top funds to print out
+topNum = 50 #Top funds to print out
 filecsv = 'funds.csv'
 filters = (typeFilter, sTime, eTime, num)
 
@@ -237,6 +246,6 @@ fundInfoList = parseFundList(listcontent)
 #pattern1(fundInfoList)
 #pattern2(fundInfoList)
 fundinfolist4 = pattern3(fundInfoList)
-pattern4(fundinfolist4) #pattern4 is based on pattern3
+pattern4(fundinfolist4, 10) #pattern4 is based on pattern3
 print '-------Analysis Completed-------'
 
