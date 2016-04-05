@@ -1,5 +1,14 @@
+######################################################################################
+#Python script for grabing fund data and do recommmandation based on defined pattern
+#Python version: 2.7
+#Owner: micerin@hotmail.com
+#Git: https://github.com/micerin
+######################################################################################
+
 #encoding=utf8
 # -*- coding: gb2312 -*-
+#note -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
+
 import urllib2
 import re
 import csv
@@ -44,10 +53,12 @@ def getFundList(filter):
     return content
 
 #Parse fund list info from given content
-def parseFundList(content):
+def parseFundList(content, savefile, filecsv):
     flist = re.findall(re_pat, content)
     print '%d funds for %s in total' % (len(flist),typeFilter)
-    #saveAsCsv(flist, filecsv) # save all fund info to csv file
+
+    if savefile:
+        saveAsCsv(flist, filecsv) # save all fund info to csv file
 
     fundinfolist = []
     for i in range(0,len(flist)):
@@ -233,6 +244,7 @@ def pattern4(fundinfolist4, maxreturn):
             break
 
 #Parameters
+#map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
 typeFilter = 'zz' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
@@ -241,14 +253,15 @@ eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
 num = 10000 #Max number fund to load(10000 for all funds)
 topNum = 30 #Top funds to print out
-filecsv = 'funds.csv'
+filecsv = 'funds.csv' #csv file name
+savecsvfile = False #Whether save csv file on not
 filters = (typeFilter, sTime, eTime, num)
 
 #Main calls
 print '-------Start Analysis-------'
 
 listcontent = getFundList(filters)
-fundInfoList = parseFundList(listcontent)
+fundInfoList = parseFundList(listcontent, savecsvfile, filecsv)
 
 #pattern1(fundInfoList)
 #pattern2(fundInfoList)
