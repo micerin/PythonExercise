@@ -161,14 +161,18 @@ def pattern2(fundinfolist):
     for i in range(0, len(fundInfoListOrdered2)):
         fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
         fundlink = fundlinkTemp % fundInfoListOrdered2[i].fundcode
-        print '   %s %s 净值：%s 近三个月：%.3f 两年数据：%s' % (fundlink , fundInfoListOrdered2[i].name, fundInfoListOrdered2[i].latestvalue,
+        print '   %s %s 净值:%s  近三个月:%.3f  两年数据:%s' % (fundlink , fundInfoListOrdered2[i].name, fundInfoListOrdered2[i].latestvalue,
                                                     string.atof(fundInfoListOrdered2[i].threemonthdelta), fundInfoListOrdered2[i].twoyeardelta)
         meetnum +=1
         if meetnum == topNum:
             break
 
 def pattern3(fundinfolist):
-    print 'Fund list 3: 权重 0.2*近3个月 + 0.45*近半年 + 0.3*近一年 + 0.05*近两年, 且评级大于等于4星'
+    #note, 'zq' would use separate weight formula per it's cycle period is not that sensitive
+    if(typeFilter == 'zq'):
+        print 'Fund list 3: 权重 0.1*近3个月 + 0.25*近半年 + 0.4*近一年 + 0.25*近两年, 且评级大于等于4星'
+    else:
+        print 'Fund list 3: 权重 0.2*近3个月 + 0.45*近半年 + 0.3*近一年 + 0.05*近两年, 且评级大于等于4星'
     weight= 0
     def passed3(fund):
         try:
@@ -182,10 +186,13 @@ def pattern3(fundinfolist):
 
     fundInfoList3 = filter(passed3, fundinfolist)
     for item in fundInfoList3:
-        item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 + \
-                        string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
-        #for zq
-        #item.weighted = string.atof(item.halfyeardelta)* 0.3 + string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.3
+        if typeFilter == 'zq':
+            item.weighted = string.atof(item.threemonthdelta)* 0.1 + string.atof(item.halfyeardelta)* 0.25 +\
+                            string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.25
+        else:
+            item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 +\
+                            string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
+
     fundInfoListOrdered3 = sorted(fundInfoList3, key=lambda fund:string.atof(fund.weighted),reverse=True)
     meetnum = 0
     fundInfoList4 = []
@@ -194,7 +201,7 @@ def pattern3(fundinfolist):
         if isHighlyRanked(fundInfoListOrdered3[i].fundcode):
             fundInfoList4.append(fundInfoListOrdered3[i])
             fundlink = fundlinkTemp % fundInfoListOrdered3[i].fundcode
-            print '   %s %s 净值：%s 权重：%s' % (fundlink , fundInfoListOrdered3[i].name,
+            print '   %s %s 净值:%s 权重:%s' % (fundlink , fundInfoListOrdered3[i].name,
                                             fundInfoListOrdered3[i].latestvalue, fundInfoListOrdered3[i].weighted)
             meetnum +=1
         if meetnum == topNum:
@@ -217,7 +224,7 @@ def pattern4(fundinfolist4, maxreturn):
             fundinfolist4.append(fundInfoListOrdered4[i])
             fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
             jjjllink = jjjllinkTemp % fundInfoListOrdered4[i].fundcode
-            print '   %s %s %s 净值：%s 业绩：%s Duration:%s' % (fundlink, jjjllink, fundInfoListOrdered4[i].name,
+            print '   %s %s %s 净值:%s 业绩:%s Duration:%s' % (fundlink, jjjllink, fundInfoListOrdered4[i].name,
                                                            fundInfoListOrdered4[i].latestvalue,
                                                            fundInfoListOrdered4[i].managerperf.encode('utf-8'),
                                                            fundInfoListOrdered4[i].managerduration.encode('utf-8'))
@@ -226,14 +233,14 @@ def pattern4(fundinfolist4, maxreturn):
             break
 
 #Parameters
-typeFilter = 'hh' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
+typeFilter = 'zz' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
 sTime = sDate.strftime("%Y-%m-%d")
 eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
 num = 10000 #Max number fund to load(10000 for all funds)
-topNum = 50 #Top funds to print out
+topNum = 30 #Top funds to print out
 filecsv = 'funds.csv'
 filters = (typeFilter, sTime, eTime, num)
 
