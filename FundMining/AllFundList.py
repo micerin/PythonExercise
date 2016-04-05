@@ -1,13 +1,13 @@
+#encoding=utf8
+# -*- coding: gb2312 -*-
+
 ######################################################################################
 #Python script for grabing fund data and do recommmandation based on defined pattern
 #Python version: 2.7
 #Owner: micerin@hotmail.com
 #Git: https://github.com/micerin
-######################################################################################
-
-#encoding=utf8
-# -*- coding: gb2312 -*-
 #note -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
+######################################################################################
 
 import urllib2
 import re
@@ -108,9 +108,9 @@ def saveAsCsv(flist, file):
     csvfiletowrite.close()
 
 #Check latest fund rank >=4
-def isHighlyRanked(foudcode):
+def isHighlyRanked(fundcode):
     rankUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=grade&code=%s&page=1&per=1'
-    rankUrl = rankUrlTemp % foudcode
+    rankUrl = rankUrlTemp % fundcode
     content = urllib2.urlopen(rankUrl).read()
     if '\'4\'' in content or '\'5\'' in content:
         return True
@@ -123,10 +123,14 @@ def getManagerPerf(funditem):
     i = 0
     retrytimes= 10
     for i in range(0,retrytimes):#retry 4 times at most since sometimes the page load return null result...
+        # utf-8 or gb2312 or gbk
         try:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
+            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read())
         except:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
+            try:
+                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
+            except:
+                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
         table = soup.find('table', attrs={'class':'w782 comm jlchg'})
         if len(table.contents[1].contents) > 0:
             funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
@@ -140,6 +144,26 @@ def getManagerPerf(funditem):
         funditem.managerduration = 'start @' + funditem.starttime
         #funditem.managerperf = '0' #default 0
     return funditem
+
+#Check if fund buyable
+def isBuyable(fund):
+    fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
+    fundlink = fundlinkTemp % fund.fundcode
+    # utf-8 or gb2312 or gbk
+    try:
+        soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(fundlink).read())
+    except:
+        try:
+            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(fundlink).read().decode('gb2312').encode('utf8'))
+        except:
+            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(fundlink).read().decode('gbk').encode('utf8'))
+    buyNow = soup.find(id='buyNowStatic')
+
+    #<a id="buyNowStatic" class="buyNowStatic unbuy" href="javascript:;" target="_self">立即购买</a>
+    #<a id="buyNowStatic" class="buyNowStatic" href="https://trade.1234567.com.cn/FundtradePage/default2.aspx?fc=162010&amp;spm=pzm" target="_blank">立即购买</a>
+    if 'trade' in dict(buyNow.attrs)['href']:
+        return True
+    return False
 
 #Analysis patterns
 def pattern1(fundinfolist):
@@ -231,7 +255,8 @@ def pattern4(fundinfolist4, maxreturn):
     for i in range(0, len(fundInfoListOrdered4)):
         fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
         jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
-        if isHighlyRanked(fundInfoListOrdered4[i].fundcode):
+        #highly ranked and buyable
+        if isHighlyRanked(fundInfoListOrdered4[i].fundcode) and isBuyable(fundInfoListOrdered4[i]):
             fundinfolist4.append(fundInfoListOrdered4[i])
             fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
             jjjllink = jjjllinkTemp % fundInfoListOrdered4[i].fundcode
@@ -244,9 +269,10 @@ def pattern4(fundinfolist4, maxreturn):
             break
 
 #Parameters
-#map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
-typeFilter = 'zz' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
+#Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
+typeFilter = 'zq' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
+#Get start and end date time
 sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
 sTime = sDate.strftime("%Y-%m-%d")
 eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
@@ -254,18 +280,21 @@ eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 num = 10000 #Max number fund to load(10000 for all funds)
 topNum = 30 #Top funds to print out
 filecsv = 'funds.csv' #csv file name
-savecsvfile = False #Whether save csv file on not
+savecsvfile = False #Whether save csv file or not
 filters = (typeFilter, sTime, eTime, num)
 
 #Main calls
 print '-------Start Analysis-------'
 
+#Retrieve fund info list
 listcontent = getFundList(filters)
 fundInfoList = parseFundList(listcontent, savecsvfile, filecsv)
 
+#Analysis based on defined pattern
 #pattern1(fundInfoList)
 #pattern2(fundInfoList)
 fundinfolist4 = pattern3(fundInfoList)
 pattern4(fundinfolist4, 10) #pattern4 is based on pattern3
+
 print '-------Analysis Completed-------'
 
