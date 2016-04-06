@@ -215,7 +215,7 @@ def pattern2(fundinfolist):
             break
 
 @exeTime
-def pattern3(fundinfolist):
+def pattern3(fundinfolist, threadnum):
     #note, 'zq' would use separate weight formula per it's cycle period is not that sensitive
     if(typeFilter == 'zq'):
         print 'Fund list 3: 权重 0.1*近3个月 + 0.25*近半年 + 0.4*近一年 + 0.25*近两年, 且评级大于等于4星'
@@ -234,81 +234,72 @@ def pattern3(fundinfolist):
 
     fundInfoList3 = filter(passed3, fundinfolist)
 
-    #Calculate weighted value for fund
-    def calweight(item):
-        if typeFilter == 'zq':
-            item.weighted = string.atof(item.threemonthdelta)* 0.1 + string.atof(item.halfyeardelta)* 0.25 +\
-                            string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.25
+    #If highly ranked then calculate weighted value for fund
+    def checkHighRankandCalWeight(item):
+        isHighlyRanked(item)
+        if(item.highlyranked):
+            if typeFilter == 'zq':
+                item.weighted = string.atof(item.threemonthdelta)* 0.1 + string.atof(item.halfyeardelta)* 0.25 +\
+                                string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.25
+            else:
+                item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 +\
+                                string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
         else:
-            item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 +\
-                            string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
+           item.weighted = '-1000' #With this, no need do extra filter on highlyranked
 
     #Calculate fund weight
-    pool0 = threadpool.ThreadPool(threadNum*2)
-    requests0 = threadpool.makeRequests(calweight, fundInfoList3)
+    pool0 = threadpool.ThreadPool(threadnum)
+    requests0 = threadpool.makeRequests(checkHighRankandCalWeight, fundInfoList3)
     [pool0.putRequest(req) for req in requests0]
     pool0.wait()
 
     fundInfoListOrdered3 = sorted(fundInfoList3, key=lambda fund:string.atof(fund.weighted),reverse=True)
 
-    #Check highly ranked
-    pool1 = threadpool.ThreadPool(threadNum*2)
-    requests1 = threadpool.makeRequests(isHighlyRanked, fundInfoListOrdered3)
-    [pool1.putRequest(req) for req in requests1]
-    pool1.wait()
-
     meetnum = 0
     fundInfoList4 = []
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
 
-    for i in range(0, len(fundInfoListOrdered3)):
-        if fundInfoListOrdered3[i].highlyranked:
-            fundInfoList4.append(fundInfoListOrdered3[i])
-            fundlink = fundlinkTemp % fundInfoListOrdered3[i].fundcode
-            print '   %s %s 净值:%s 权重:%s' % (fundlink , fundInfoListOrdered3[i].name,
-                                            fundInfoListOrdered3[i].latestvalue, fundInfoListOrdered3[i].weighted)
-            meetnum +=1
-        if meetnum == topNum:
-            break
+    for i in range(0, topNum):
+        fundInfoList4.append(fundInfoListOrdered3[i])
+        fundlink = fundlinkTemp % fundInfoListOrdered3[i].fundcode
+        print '   %s %s 净值:%s 权重:%s' % (fundlink , fundInfoListOrdered3[i].name,
+                                        fundInfoListOrdered3[i].latestvalue, fundInfoListOrdered3[i].weighted)
 
     return fundInfoList4
 
 @exeTime
-def pattern4(fundinfolist4, maxreturn):
+def pattern4(fundinfolist4, maxreturn, threadnum):
     #Check fund manager perf
     print 'Fund list 4: 基于pattern3的结果，排序当前基金经理业绩'
 
+    #Get manager perf if buyable
+    def checkBuyableAndGetPerf(fund):
+        isBuyable(fund)
+        if fund.buyable:
+            getManagerPerf(fund)
+        else:
+            fund.managerperf = '-1000' #With this, no need do extra filter on buyable
+
     #Get fund manager perf
-    pool0 = threadpool.ThreadPool(threadNum)
-    requests0 = threadpool.makeRequests(getManagerPerf, fundinfolist4)
-    [pool0.putRequest(req) for req in requests0]
-    pool0.wait()
+    pool2 = threadpool.ThreadPool(threadnum)
+    requests2 = threadpool.makeRequests(checkBuyableAndGetPerf, fundinfolist4)
+    [pool2.putRequest(req) for req in requests2]
+    pool2.wait()
 
     fundInfoListOrdered4 = sorted(fundinfolist4, key=lambda fund:string.atof(fund.managerperf),reverse=True)
-
-    #Check fund buyable
-    pool1 = threadpool.ThreadPool(threadNum)
-    requests1 = threadpool.makeRequests(isBuyable, fundInfoListOrdered4)
-    [pool1.putRequest(req) for req in requests1]
-    pool1.wait()
 
     meetnum = 0
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
 
-    for i in range(0, len(fundInfoListOrdered4)):
-        #highly ranked and buyable
-        if fundInfoListOrdered4[i].buyable:
-            fundinfolist4.append(fundInfoListOrdered4[i])
-            fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
-            jjjllink = jjjllinkTemp % fundInfoListOrdered4[i].fundcode
-            print '   %s %s %s 净值:%s 业绩:%s Duration:%s' % (fundlink, jjjllink, fundInfoListOrdered4[i].name,
-                                                           fundInfoListOrdered4[i].latestvalue,
-                                                           fundInfoListOrdered4[i].managerperf.encode('utf-8'),
-                                                           fundInfoListOrdered4[i].managerduration.encode('utf-8'))
-            meetnum +=1
-        if meetnum == maxreturn:
-            break
+    for i in range(0, maxreturn):
+        fundinfolist4.append(fundInfoListOrdered4[i])
+        fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
+        jjjllink = jjjllinkTemp % fundInfoListOrdered4[i].fundcode
+        print '   %s %s %s 净值:%s 业绩:%s Duration:%s' % (fundlink, jjjllink, fundInfoListOrdered4[i].name,
+                                                       fundInfoListOrdered4[i].latestvalue,
+                                                       fundInfoListOrdered4[i].managerperf.encode('utf-8'),
+                                                       fundInfoListOrdered4[i].managerduration.encode('utf-8'))
 
 
 #Parameters
@@ -337,8 +328,8 @@ fundInfoList = parseFundList(listcontent, savecsvfile, filecsv)
 #Analysis based on defined pattern
 #pattern1(fundInfoList)
 #pattern2(fundInfoList)
-fundinfolist4 = pattern3(fundInfoList)
-pattern4(fundinfolist4, 10) #pattern4 is based on pattern3
+fundinfolist4 = pattern3(fundInfoList, threadNum*2)
+pattern4(fundinfolist4, 10, threadNum) #pattern4 is based on pattern3
 
 print '-------Analysis Completed-------'
 
