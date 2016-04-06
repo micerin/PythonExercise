@@ -49,9 +49,9 @@ class Fund:
         self.managerduration = ''
         self.highlyranked = False
         self.buyable = False
-        self.maxdrop = ''
-        self.maxdropindex = -1
-        self.horribleday = ''
+        self.maxdelta = ''
+        self.maxdeltaindex = -1
+        self.eventday = ''
 
 class FundValue:
     def __init__(self):
@@ -188,9 +188,9 @@ def isBuyable(fund):
     if 'trade' in dict(buyNow.attrs)['href']:
         fund.buyable = True
 
-def maxDrop(fund):
-    jjjzUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=%s&page=1&per=200&sdate=&edate='
-    jjjzUrl = jjjzUrlTemp % fund.fundcode
+def maxDropOrIncrease(fund):
+    jjjzUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=%s&page=1&per=%d&sdate=&edate='
+    jjjzUrl = jjjzUrlTemp % (fund.fundcode, workingdays)
     content = urllib2.urlopen(jjjzUrl).read()
     re_strforjjjz = r'<tr><td>([\d-]+)</td><td class=\'tor bold\'>([\d.]+)</td><td class=\'tor bold\'>([\d.]+)</td><td class=\'tor bold (\w{3,5})\'>(([\d.-]+)?\%)?</td>'
     re_patforjjjz = re.compile(re_strforjjjz)
@@ -205,44 +205,57 @@ def maxDrop(fund):
         dayfund.dayincrease = item[5]
         fundValueList.append(dayfund)
 
-    fund.maxdrop, fund.maxdropindex =  GetMinMFromN(fundValueList, 10)
-    fund.horribleday = fundValueList[fund.maxdropindex].date
-    print '%.3f %s %s' % (fund.maxdrop, fund.fundcode, fund.horribleday)
+    if checkdrop:
+        fund.maxdelta, fund.maxdeltaindex =  GetMinMFromN(fundValueList, deltadays)
+    else:
+        fund.maxdelta, fund.maxdeltaindex =  GetMaxMFromN(fundValueList, deltadays)
+    fund.eventday = fundValueList[fund.maxdeltaindex].date
+    #print '%.3f %s %s' % (fund.maxdelta, fund.fundcode, fund.eventday)
 
 #New analysis patterns
 
 @exeTime
-def pattern5(fundinfolist, threadnum, topnum):
-    print 'Fund list 5: 侧重最近一年表现，新兴市场'
+def pattern5(fundinfolist, threadnum, days, isdrop, topnum):
+    print 'Fund list 5: 侧重最近一年表现，新兴市场(少于两年=两年数据空)'
     #至少成立一年
     def passed5(fund):
         try:
             string.atof(fund.halfyeardelta)
             string.atof(fund.yeardelta)
-            return True
+            return fund.twoyeardelta == ""
+            #return True
         except:
             return False
 
     fundInfoList5 = filter(passed5, fundinfolist)
+    print 'total funds met requirements: %d' % len(fundInfoList5)
 
     pool0 = threadpool.ThreadPool(threadnum)
-    requests0 = threadpool.makeRequests(maxDrop, fundInfoList5)
+    requests0 = threadpool.makeRequests(maxDropOrIncrease, fundInfoList5)
     [pool0.putRequest(req) for req in requests0]
     pool0.wait()
 
-    fundInfoListOrdered5 = sorted(fundInfoList5, key=lambda fund:string.atof(fund.maxdrop),reverse=False)
+    fundInfoListOrdered5 = sorted(fundInfoList5, key=lambda fund:string.atof(fund.maxdelta),reverse=(isdrop==False))
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
+    jjjzUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=%s&page=1&per=%d&sdate=&edate='
     for i in range(0,topnum):
         fundlink = fundlinkTemp % fundInfoListOrdered5[i].fundcode
-        print '   %s %s 净值:%s 10工作日最大回撤:%s 灾难日:%s' % (fundlink , fundInfoListOrdered5[i].name,
-                                                      fundInfoListOrdered5[i].latestvalue,
-                                                      fundInfoListOrdered5[i].maxdrop,
-                                                      fundInfoListOrdered5[i].horribleday)
+        jjjzUrl = jjjzUrlTemp % (fundInfoListOrdered5[i].fundcode, workingdays)
+        if isdrop:
+            print '   %s %s %s 净值:%s %d工作日最大回撤:%s 灾难日:%s' % (fundlink , jjjzUrl, fundInfoListOrdered5[i].name,
+                                                        fundInfoListOrdered5[i].latestvalue, days,
+                                                        fundInfoListOrdered5[i].maxdelta,
+                                                        fundInfoListOrdered5[i].eventday)
+        else:
+            print '   %s %s %s 净值:%s %d工作日最大涨幅:%s 始于:%s' % (fundlink , jjjzUrl, fundInfoListOrdered5[i].name,
+                                                        fundInfoListOrdered5[i].latestvalue,days,
+                                                        fundInfoListOrdered5[i].maxdelta,
+                                                        fundInfoListOrdered5[i].eventday)
 
 
 #Parameters
 #Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
-typeFilter = 'zq' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
+typeFilter = 'hh' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 #Get start and end date time
 sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
@@ -255,6 +268,9 @@ threadNum = topNum #Number for multi-thread
 filecsv = 'funds.csv' #csv file name
 savecsvfile = False #Whether save csv file or not
 filters = (typeFilter, sTime, eTime, num)
+workingdays = 100 #fund history value check working days window
+deltadays = 10 #delta working days to check drop and increase max
+checkdrop = False #check drop or increase
 
 #Main calls
 print '-------Start Analysis-------'
@@ -264,7 +280,7 @@ listcontent = getFundList(filters)
 fundInfoList = parseFundList(listcontent, savecsvfile, filecsv)
 
 #Analysis based on defined pattern
-pattern5(fundInfoList, threadNum, topNum)
+pattern5(fundInfoList, threadNum, deltadays, checkdrop, topNum)
 
 print '-------Analysis Completed-------'
 

@@ -8,7 +8,9 @@ def GetMaxMFromN(data, m):
         if sum0 > max:
             max = sum0
             maxindex = i
-    return max, maxindex
+    if max == 0:
+        max = -100000
+    return max, len(data)-maxindex-1
 
 def GetMinMFromN(data, m):
     min = 100000
