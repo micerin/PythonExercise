@@ -16,6 +16,7 @@ import string
 import time
 import datetime
 import BeautifulSoup
+import threadpool
 
 urlTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?' \
           'op=ph&dt=kf&ft=%s&rs=&gs=0&sc=zzf&st=desc&sd=%s&ed=%s&qdii=&tabSubtype=,,,,,&pi=1&pn=%s&dx=1'
@@ -45,6 +46,19 @@ class Fund:
         self.weighted = ''
         self.managerperf = ''
         self.managerduration = ''
+        self.highlyranked = False
+        self.buyable = False
+
+#Utility function to calculate func excution time
+def exeTime(func):
+	def newFunc(*args, **args2):
+		t0 = time.time()
+		print "@%s, {%s} start" % (time.strftime("%X", time.localtime()), func.__name__)
+		back = func(*args, **args2)
+		print "@%s, {%s} end" % (time.strftime("%X", time.localtime()), func.__name__)
+		print "@%.3fs taken for {%s}" % (time.time() - t0, func.__name__)
+		return back
+	return newFunc
 
 #Get fund list per filter
 def getFundList(filter):
@@ -108,13 +122,12 @@ def saveAsCsv(flist, file):
     csvfiletowrite.close()
 
 #Check latest fund rank >=4
-def isHighlyRanked(fundcode):
+def isHighlyRanked(fund):
     rankUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=grade&code=%s&page=1&per=1'
-    rankUrl = rankUrlTemp % fundcode
+    rankUrl = rankUrlTemp % fund.fundcode
     content = urllib2.urlopen(rankUrl).read()
     if '\'4\'' in content or '\'5\'' in content:
-        return True
-    return False
+        fund.highlyranked = True
 
 #Get manager perf for given fund item
 def getManagerPerf(funditem):
@@ -125,12 +138,12 @@ def getManagerPerf(funditem):
     for i in range(0,retrytimes):#retry 4 times at most since sometimes the page load return null result...
         # utf-8 or gb2312 or gbk
         try:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read())
+            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
         except:
             try:
-                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
-            except:
                 soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
+            except:
+                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read())
         table = soup.find('table', attrs={'class':'w782 comm jlchg'})
         if len(table.contents[1].contents) > 0:
             funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
@@ -162,8 +175,7 @@ def isBuyable(fund):
     #<a id="buyNowStatic" class="buyNowStatic unbuy" href="javascript:;" target="_self">立即购买</a>
     #<a id="buyNowStatic" class="buyNowStatic" href="https://trade.1234567.com.cn/FundtradePage/default2.aspx?fc=162010&amp;spm=pzm" target="_blank">立即购买</a>
     if 'trade' in dict(buyNow.attrs)['href']:
-        return True
-    return False
+        fund.buyable = True
 
 #Analysis patterns
 def pattern1(fundinfolist):
@@ -202,6 +214,7 @@ def pattern2(fundinfolist):
         if meetnum == topNum:
             break
 
+@exeTime
 def pattern3(fundinfolist):
     #note, 'zq' would use separate weight formula per it's cycle period is not that sensitive
     if(typeFilter == 'zq'):
@@ -220,7 +233,8 @@ def pattern3(fundinfolist):
             return False
 
     fundInfoList3 = filter(passed3, fundinfolist)
-    for item in fundInfoList3:
+
+    def calweight(item):
         if typeFilter == 'zq':
             item.weighted = string.atof(item.threemonthdelta)* 0.1 + string.atof(item.halfyeardelta)* 0.25 +\
                             string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.25
@@ -228,12 +242,36 @@ def pattern3(fundinfolist):
             item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 +\
                             string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
 
+    #Calculate fund weight
+    pool0 = threadpool.ThreadPool(threadNum)
+    requests0 = threadpool.makeRequests(calweight, fundInfoList3)
+    [pool0.putRequest(req) for req in requests0]
+    pool0.wait()
+
+    '''
+    for item in fundInfoList3:
+        if typeFilter == 'zq':
+            item.weighted = string.atof(item.threemonthdelta)* 0.1 + string.atof(item.halfyeardelta)* 0.25 +\
+                            string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.25
+        else:
+            item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 +\
+                            string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
+    '''
+
     fundInfoListOrdered3 = sorted(fundInfoList3, key=lambda fund:string.atof(fund.weighted),reverse=True)
+
+    #Check highly ranked
+    pool1 = threadpool.ThreadPool(threadNum)
+    requests1 = threadpool.makeRequests(isHighlyRanked, fundInfoList3)
+    [pool1.putRequest(req) for req in requests1]
+    pool1.wait()
+
     meetnum = 0
     fundInfoList4 = []
+    fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
+
     for i in range(0, len(fundInfoListOrdered3)):
-        fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
-        if isHighlyRanked(fundInfoListOrdered3[i].fundcode):
+        if fundInfoListOrdered3[i].highlyranked:
             fundInfoList4.append(fundInfoListOrdered3[i])
             fundlink = fundlinkTemp % fundInfoListOrdered3[i].fundcode
             print '   %s %s 净值:%s 权重:%s' % (fundlink , fundInfoListOrdered3[i].name,
@@ -244,19 +282,37 @@ def pattern3(fundinfolist):
 
     return fundInfoList4
 
+@exeTime
 def pattern4(fundinfolist4, maxreturn):
     #Check fund manager perf
     print 'Fund list 4: 基于pattern3的结果，排序当前基金经理业绩'
+
+    #Get fund manager perf
+    pool0 = threadpool.ThreadPool(threadNum)
+    requests0 = threadpool.makeRequests(getManagerPerf, fundinfolist4)
+    [pool0.putRequest(req) for req in requests0]
+    pool0.wait()
+
+    '''
     for funditem in fundinfolist4:
         funditem = getManagerPerf(funditem)
+    '''
 
     fundInfoListOrdered4 = sorted(fundinfolist4, key=lambda fund:string.atof(fund.managerperf),reverse=True)
+
+    #Check fund buyable
+    pool1 = threadpool.ThreadPool(threadNum)
+    requests1 = threadpool.makeRequests(isBuyable, fundinfolist4)
+    [pool1.putRequest(req) for req in requests1]
+    pool1.wait()
+
     meetnum = 0
+    fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
+    jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
+
     for i in range(0, len(fundInfoListOrdered4)):
-        fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
-        jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
         #highly ranked and buyable
-        if isHighlyRanked(fundInfoListOrdered4[i].fundcode) and isBuyable(fundInfoListOrdered4[i]):
+        if fundInfoListOrdered4[i].buyable:
             fundinfolist4.append(fundInfoListOrdered4[i])
             fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
             jjjllink = jjjllinkTemp % fundInfoListOrdered4[i].fundcode
@@ -279,6 +335,7 @@ eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
 num = 10000 #Max number fund to load(10000 for all funds)
 topNum = 30 #Top funds to print out
+threadNum = 8
 filecsv = 'funds.csv' #csv file name
 savecsvfile = False #Whether save csv file or not
 filters = (typeFilter, sTime, eTime, num)
