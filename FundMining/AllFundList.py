@@ -234,6 +234,7 @@ def pattern3(fundinfolist):
 
     fundInfoList3 = filter(passed3, fundinfolist)
 
+    #Calculate weighted value for fund
     def calweight(item):
         if typeFilter == 'zq':
             item.weighted = string.atof(item.threemonthdelta)* 0.1 + string.atof(item.halfyeardelta)* 0.25 +\
@@ -243,26 +244,16 @@ def pattern3(fundinfolist):
                             string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
 
     #Calculate fund weight
-    pool0 = threadpool.ThreadPool(threadNum)
+    pool0 = threadpool.ThreadPool(threadNum*2)
     requests0 = threadpool.makeRequests(calweight, fundInfoList3)
     [pool0.putRequest(req) for req in requests0]
     pool0.wait()
 
-    '''
-    for item in fundInfoList3:
-        if typeFilter == 'zq':
-            item.weighted = string.atof(item.threemonthdelta)* 0.1 + string.atof(item.halfyeardelta)* 0.25 +\
-                            string.atof(item.yeardelta)*0.4 + string.atof(item.twoyeardelta)*0.25
-        else:
-            item.weighted = string.atof(item.threemonthdelta)* 0.2 + string.atof(item.halfyeardelta)* 0.45 +\
-                            string.atof(item.yeardelta)*0.3 + string.atof(item.twoyeardelta)*0.05
-    '''
-
     fundInfoListOrdered3 = sorted(fundInfoList3, key=lambda fund:string.atof(fund.weighted),reverse=True)
 
     #Check highly ranked
-    pool1 = threadpool.ThreadPool(threadNum)
-    requests1 = threadpool.makeRequests(isHighlyRanked, fundInfoList3)
+    pool1 = threadpool.ThreadPool(threadNum*2)
+    requests1 = threadpool.makeRequests(isHighlyRanked, fundInfoListOrdered3)
     [pool1.putRequest(req) for req in requests1]
     pool1.wait()
 
@@ -293,16 +284,11 @@ def pattern4(fundinfolist4, maxreturn):
     [pool0.putRequest(req) for req in requests0]
     pool0.wait()
 
-    '''
-    for funditem in fundinfolist4:
-        funditem = getManagerPerf(funditem)
-    '''
-
     fundInfoListOrdered4 = sorted(fundinfolist4, key=lambda fund:string.atof(fund.managerperf),reverse=True)
 
     #Check fund buyable
     pool1 = threadpool.ThreadPool(threadNum)
-    requests1 = threadpool.makeRequests(isBuyable, fundinfolist4)
+    requests1 = threadpool.makeRequests(isBuyable, fundInfoListOrdered4)
     [pool1.putRequest(req) for req in requests1]
     pool1.wait()
 
@@ -324,6 +310,7 @@ def pattern4(fundinfolist4, maxreturn):
         if meetnum == maxreturn:
             break
 
+
 #Parameters
 #Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
 typeFilter = 'zq' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
@@ -335,7 +322,7 @@ eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
 num = 10000 #Max number fund to load(10000 for all funds)
 topNum = 30 #Top funds to print out
-threadNum = 8
+threadNum = topNum #Number for multi-thread
 filecsv = 'funds.csv' #csv file name
 savecsvfile = False #Whether save csv file or not
 filters = (typeFilter, sTime, eTime, num)
