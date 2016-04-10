@@ -4,7 +4,7 @@ def GetMaxMFromN(data, m):
     max = -100000
     maxindex = -1
     for i in range(0, len(data)-m):
-        sum0 = Sum(data, i, m)
+        sum0 = SumReverse(data, i, m)
         if sum0 > max:
             max = sum0
             maxindex = i
@@ -16,7 +16,7 @@ def GetMinMFromN(data, m):
     min = 100000
     minindex = -1
     for i in range(0, len(data)-m):
-        sum0 = Sum(data, i, m)
+        sum0 = SumReverse(data, i, m)
         if sum0 < min:
             min = sum0
             minindex = i
@@ -24,7 +24,27 @@ def GetMinMFromN(data, m):
         min = 100000
     return min, len(data)-minindex-1
 
-def Sum(data, index, m):
+def GetMaxFromM(data, m):
+    max = -10000
+    sum0 = 0
+    for i in range(1,m):
+        if data[i].dayincrease != '' and data[i].dayincrease != ' ':
+            sum0 += string.atof(data[i].dayincrease)
+            if sum0 > max:
+                max = sum0
+    return max
+
+def GetMinFromM(data, m):
+    min = 10000
+    sum0 = 0
+    for i in range(1,m):
+        if data[i].dayincrease != '' and data[i].dayincrease != ' ':
+            sum0 += string.atof(data[i].dayincrease)
+            if sum0 < min:
+                min = sum0
+    return min
+
+def SumReverse(data, index, m):
     sum = 0
     if (index + m) > len(data):
         return 'invalid'

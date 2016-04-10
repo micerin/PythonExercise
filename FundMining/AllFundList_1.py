@@ -52,6 +52,7 @@ class Fund:
         self.maxdelta = ''
         self.maxdeltaindex = -1
         self.eventday = ''
+        self.action = 0
 
 class FundValue:
     def __init__(self):
@@ -188,9 +189,10 @@ def isBuyable(fund):
     if 'trade' in dict(buyNow.attrs)['href']:
         fund.buyable = True
 
-def maxDropOrIncrease(fund):
-    jjjzUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=%s&page=1&per=%d&sdate=&edate='
-    jjjzUrl = jjjzUrlTemp % (fund.fundcode, workingdays)
+#Get fund history value
+def getFundvalueHis(fundcode, days):
+    jjjzUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=%s&page=1&per=%d&sdate=&edate=%s'
+    jjjzUrl = jjjzUrlTemp % (fundcode, days, etimeforhis)
     content = urllib2.urlopen(jjjzUrl).read()
     re_strforjjjz = r'<tr><td>([\d-]+)</td><td class=\'tor bold\'>([\d.]+)</td><td class=\'tor bold\'>([\d.]+)</td><td class=\'tor bold (\w{3,5})\'>(([\d.-]+)?\%)?</td>'
     re_patforjjjz = re.compile(re_strforjjjz)
@@ -204,6 +206,11 @@ def maxDropOrIncrease(fund):
         dayfund.oavalue = item[2]
         dayfund.dayincrease = item[5]
         fundValueList.append(dayfund)
+    return fundValueList
+
+#Check max delta for given fund
+def maxDropOrIncrease(fund):
+    fundValueList = getFundvalueHis(fund.funcode, workingdays)
 
     if checkdrop:
         fund.maxdelta, fund.maxdeltaindex =  GetMinMFromN(fundValueList, deltadays)
@@ -211,6 +218,22 @@ def maxDropOrIncrease(fund):
         fund.maxdelta, fund.maxdeltaindex =  GetMaxMFromN(fundValueList, deltadays)
     fund.eventday = fundValueList[fund.maxdeltaindex].date
     #print '%.3f %s %s' % (fund.maxdelta, fund.fundcode, fund.eventday)
+
+#Get fund perf for delta action days to determine action
+def getPerfForFund(fund):
+    fundValueList = getFundvalueHis(fund.fundcode, deltadaysforaction)
+    fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
+    fundurl = fundlinkTemp % fund.fundcode
+    print '  %s %s' % (fundurl, fundValueList[0].dayincrease)
+    if string.atof(fundValueList[0].dayincrease) > 0:
+        value = GetMaxFromM(fundValueList,deltadaysforaction)
+        if value > upthreshold:
+            fund.action = 1
+    elif string.atof(fundValueList[0].dayincrease) < 0:
+         value = GetMinFromM(fundValueList,deltadaysforaction)
+         if value < downthreshould:
+            fund.action = -1
+    #default action=0
 
 #New analysis patterns
 
@@ -252,13 +275,40 @@ def pattern5(fundinfolist, threadnum, days, isdrop, topnum):
                                                         fundInfoListOrdered5[i].maxdelta,
                                                         fundInfoListOrdered5[i].eventday)
 
+@exeTime
+def pattern6(fundcodelist):
+    print 'Check delta for self selected fund, give buy/sell/noaction order'
+    print 'Strategy: increased 8% in passed m days(at most) then sell, or dropped 5% then buy, otherwise, no action'
+
+    fundlist6 = []
+    for fundcode in fundcodelist:
+        fund = Fund()
+        fund.fundcode = fundcode
+        fundlist6.append(fund)
+
+    pool0 = threadpool.ThreadPool(len(fundcodelist))
+    requests0 = threadpool.makeRequests(getPerfForFund, fundlist6)
+    [pool0.putRequest(req) for req in requests0]
+    pool0.wait()
+
+    actionsum = 0
+    for fund in fundlist6:
+        actionsum +=fund.action
+
+    #Strategy to sell or buy in under such unstable situation
+    if actionsum > 2:
+        print 'ActionSum: %d for %d funds, Time To Sell Out!!!' % (actionsum, len(fundcodelist))
+    elif actionsum < -2:
+        print 'ActionSum: %d for %d funds, Good To Buy In!!!' % (actionsum, len(fundcodelist))
+    else:
+        print 'ActionSum: %d for %d funds, No Valuable Action!!!' % (actionsum, len(fundcodelist))
 
 #Parameters
 #Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
 typeFilter = 'hh' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 #Get start and end date time
-sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
+sDate = datetime.datetime.now() - datetime.timedelta(days=365)
 sTime = sDate.strftime("%Y-%m-%d")
 eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
@@ -272,6 +322,13 @@ workingdays = 100 #fund history value check working days window
 deltadays = 10 #delta working days to check drop and increase max
 checkdrop = False #check drop or increase
 
+#parameter for pattern 6
+myfundlist = ['377010','270005','110029','590008','163406','161810','519113','162010', '166011','530018','161810','161017','320010', '100038', '040016']
+upthreshold = 8
+downthreshould = -1
+deltadaysforaction = 5
+etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=0)).strftime("%Y-%m-%d")
+
 #Main calls
 print '-------Start Analysis-------'
 
@@ -280,7 +337,8 @@ listcontent = getFundList(filters)
 fundInfoList = parseFundList(listcontent, savecsvfile, filecsv)
 
 #Analysis based on defined pattern
-pattern5(fundInfoList, threadNum, deltadays, checkdrop, topNum)
+#pattern5(fundInfoList, threadNum, deltadays, checkdrop, topNum)
+pattern6(myfundlist)
 
 print '-------Analysis Completed-------'
 
