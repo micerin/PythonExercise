@@ -261,7 +261,7 @@ def pattern5(fundinfolist, threadnum, days, isdrop, topnum):
     fundInfoListOrdered5 = sorted(fundInfoList5, key=lambda fund:string.atof(fund.maxdelta),reverse=(isdrop==False))
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     jjjzUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=%s&page=1&per=%d&sdate=&edate='
-    for i in range(0,topnum):
+    for i in range(0,min(topnum, len(fundInfoListOrdered5))):
         fundlink = fundlinkTemp % fundInfoListOrdered5[i].fundcode
         jjjzUrl = jjjzUrlTemp % (fundInfoListOrdered5[i].fundcode, workingdays)
         if isdrop:

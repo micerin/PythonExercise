@@ -259,7 +259,7 @@ def pattern3(fundinfolist, threadnum):
     fundInfoList4 = []
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
 
-    for i in range(0, topNum):
+    for i in range(0, min(topNum,len(fundInfoListOrdered3))):
         fundInfoList4.append(fundInfoListOrdered3[i])
         fundlink = fundlinkTemp % fundInfoListOrdered3[i].fundcode
         print '   %s %s 净值:%s 权重:%s' % (fundlink , fundInfoListOrdered3[i].name,
@@ -292,7 +292,7 @@ def pattern4(fundinfolist4, maxreturn, threadnum):
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
 
-    for i in range(0, maxreturn):
+    for i in range(0, min(maxreturn,len(fundInfoListOrdered4))):
         fundinfolist4.append(fundInfoListOrdered4[i])
         fundlink = fundlinkTemp % fundInfoListOrdered4[i].fundcode
         jjjllink = jjjllinkTemp % fundInfoListOrdered4[i].fundcode
@@ -304,7 +304,7 @@ def pattern4(fundinfolist4, maxreturn, threadnum):
 
 #Parameters
 #Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
-typeFilter = 'zq' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
+typeFilter = 'etf' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 #Get start and end date time
 sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
