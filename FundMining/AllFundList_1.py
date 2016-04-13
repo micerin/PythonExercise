@@ -6,7 +6,7 @@
 #Python version: 2.7
 #Owner: micerin@hotmail.com
 #Git: https://github.com/micerin
-#note -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
+#note -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan, ct=changnei
 ######################################################################################
 
 import urllib2
@@ -21,6 +21,8 @@ from FindMaxMinMFromN import*
 
 urlTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?' \
           'op=ph&dt=kf&ft=%s&rs=&gs=0&sc=zzf&st=desc&sd=%s&ed=%s&qdii=&tabSubtype=,,,,,&pi=1&pn=%s&dx=1'
+urlCtTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=fb&ft=ct&rs=&gs=0&sc=zzf&st=desc&pi=1&pn=1000'
+
 re_strforfund = r'(\"[^\"]+\"[,]?)'
 re_pat = re.compile(re_strforfund)
 
@@ -53,6 +55,7 @@ class Fund:
         self.maxdeltaindex = -1
         self.eventday = ''
         self.action = 0
+        self.latestout = False
 
 class FundValue:
     def __init__(self):
@@ -73,13 +76,18 @@ def exeTime(func):
 	return newFunc
 
 #Get fund list per filter
-def getFundList(filter):
-    url = urlTemp % filter
+def getFundList(filter, type):
+    url = ''
+    if type == 'ct':
+        url = urlCtTemp
+    else:
+        url = urlTemp % filter
+
     content = urllib2.urlopen(url).read()
     return content
 
 #Parse fund list info from given content
-def parseFundList(content, savefile, filecsv):
+def parseFundList(content, savefile, filecsv, type):
     flist = re.findall(re_pat, content)
     print '%d funds for %s in total' % (len(flist),typeFilter)
 
@@ -111,8 +119,9 @@ def parseFundList(content, savefile, filecsv):
     #get overall data for all funds, all kinds
     #re_strforall = r'allNum:(.*),gpNum:(.*),hhNum:(.*),zqNum:(.*),zsNum:(.*),bbNum:(.*),qdiiNum:(.*),etfNum:(.*),lofNum:(.*)'
     #re_patforall = re.compile(re_strforall)
-    index = string.index(content, 'allNum:')
-    print content[index:-2]
+    if type != 'ct':
+        index = string.index(content, 'allNum:')
+        print content[index:-2]
     return fundinfolist
 
 #Save fund items to csv file
@@ -190,27 +199,56 @@ def isBuyable(fund):
         fund.buyable = True
 
 #Get fund history value
-def getFundvalueHis(fundcode, days):
+def getFundvalueHis(fund, days):
     jjjzUrlTemp = 'http://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=%s&page=1&per=%d&sdate=&edate=%s'
-    jjjzUrl = jjjzUrlTemp % (fundcode, days, etimeforhis)
+    jjjzUrl = jjjzUrlTemp % (fund.fundcode, days, etimeforhis)
     content = urllib2.urlopen(jjjzUrl).read()
     re_strforjjjz = r'<tr><td>([\d-]+)</td><td class=\'tor bold\'>([\d.]+)</td><td class=\'tor bold\'>([\d.]+)</td><td class=\'tor bold (\w{3,5})\'>(([\d.-]+)?\%)?</td>'
     re_patforjjjz = re.compile(re_strforjjjz)
+    todayDate = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
     flist = re.findall(re_patforjjjz, content)
     fundValueList = []
     for item in flist:
         dayfund = FundValue()
         dayfund.date = item[0]
+        if (fund.latestout == False and (todayDate in dayfund.date)):
+            fund.latestout = True
         dayfund.value = item[1]
         dayfund.oavalue = item[2]
         dayfund.dayincrease = item[5]
         fundValueList.append(dayfund)
+
+    #value for today is not updated, could be none working day or not later enough
+    if fund.latestout == False:
+        #check if working day
+        week = int(time.strftime("%w"))
+        if week <6 and week >0:
+            dayfund = FundValue()
+            dayfund.dayincrease = getEstimatedValue(fund.fundcode)
+            dayfund.date = todayDate
+            fundValueList.insert(0,dayfund) #should insert to 0 position
+
     return fundValueList
+
+#Get estimated value for fund
+def getEstimatedValue(fundcode):
+    fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
+    fundurl = fundlinkTemp % fundcode
+    #id="gz_gszzl">+1.31%</span
+    re_strforjjgz = r'id="gz_gszzl">([-+.\d]+)%</span'
+    re_patforjjgz = re.compile(re_strforjjgz)
+    content = urllib2.urlopen(fundurl).read()
+    flist = re.findall(re_patforjjgz,content)
+    if len(flist) > 0:
+        print '  Estimated for %s: %s ' %(fundcode, flist[0])
+        return string.atof(flist[0])
+    else:
+        return 0
 
 #Check max delta for given fund
 def maxDropOrIncrease(fund):
-    fundValueList = getFundvalueHis(fund.funcode, workingdays)
+    fundValueList = getFundvalueHis(fund, workingdays)
 
     if checkdrop:
         fund.maxdelta, fund.maxdeltaindex =  GetMinMFromN(fundValueList, deltadays)
@@ -221,10 +259,12 @@ def maxDropOrIncrease(fund):
 
 #Get fund perf for delta action days to determine action
 def getPerfForFund(fund):
-    fundValueList = getFundvalueHis(fund.fundcode, deltadaysforaction)
+    fundValueList = getFundvalueHis(fund, deltadaysforaction)
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     fundurl = fundlinkTemp % fund.fundcode
-    print '  %s %s' % (fundurl, fundValueList[0].dayincrease)
+    value  = 0
+    if len(fundValueList) <= 0:
+        return
     if string.atof(fundValueList[0].dayincrease) > 0:
         value = GetMaxFromM(fundValueList,deltadaysforaction)
         if value > upthreshold:
@@ -233,11 +273,13 @@ def getPerfForFund(fund):
          value = GetMinFromM(fundValueList,deltadaysforaction)
          if value < downthreshould:
             fund.action = -1
+    print '  %s %s %.3f %s' % (fundurl, fundValueList[0].dayincrease, value, fund.name)
     #default action=0
 
 #New analysis patterns
 
 @exeTime
+#Check shake extent
 def pattern5(fundinfolist, threadnum, days, isdrop, topnum):
     print 'Fund list 5: 侧重最近一年表现，新兴市场(少于两年=两年数据空)'
     #至少成立一年
@@ -276,6 +318,7 @@ def pattern5(fundinfolist, threadnum, days, isdrop, topnum):
                                                         fundInfoListOrdered5[i].eventday)
 
 @exeTime
+#Self OTC fund
 def pattern6(fundcodelist):
     print 'Check delta for self selected fund, give buy/sell/noaction order'
     print 'Strategy: increased 8% in passed m days(at most) then sell, or dropped 5% then buy, otherwise, no action'
@@ -303,9 +346,14 @@ def pattern6(fundcodelist):
     else:
         print 'ActionSum: %d for %d funds, No Valuable Action!!!' % (actionsum, len(fundcodelist))
 
+@exeTime
+#In fund filter
+def pattern7(fundcodelist):
+    print '筛选场内基金'
+
 #Parameters
 #Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
-typeFilter = 'hh' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
+typeFilter = 'ct' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 #Get start and end date time
 sDate = datetime.datetime.now() - datetime.timedelta(days=365)
@@ -325,16 +373,16 @@ checkdrop = False #check drop or increase
 #parameter for pattern 6
 myfundlist = ['377010','270005','110029','590008','163406','161810','519113','162010', '166011','530018','161810','161017','320010', '100038', '040016']
 upthreshold = 8
-downthreshould = -1
-deltadaysforaction = 5
+downthreshould = -5
+deltadaysforaction = 10
 etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=0)).strftime("%Y-%m-%d")
 
 #Main calls
 print '-------Start Analysis-------'
 
 #Retrieve fund info list
-listcontent = getFundList(filters)
-fundInfoList = parseFundList(listcontent, savecsvfile, filecsv)
+listcontent = getFundList(filters, typeFilter)
+fundInfoList = parseFundList(listcontent, savecsvfile, filecsv, typeFilter)
 
 #Analysis based on defined pattern
 #pattern5(fundInfoList, threadNum, deltadays, checkdrop, topNum)
