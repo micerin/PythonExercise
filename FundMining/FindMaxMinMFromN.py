@@ -27,6 +27,8 @@ def GetMinMFromN(data, m):
 def GetMaxFromM(data, m):
     max = -10000
     sum0 = 0
+    if len(data) < 0:
+        return 0
     for i in range(0,m):
         if data[i].dayincrease != '' and data[i].dayincrease != ' ':
             sum0 += string.atof(data[i].dayincrease)
@@ -37,6 +39,8 @@ def GetMaxFromM(data, m):
 def GetMinFromM(data, m):
     min = 10000
     sum0 = 0
+    if len(data) < 0:
+        return 0
     for i in range(0,m):
         if data[i].dayincrease != '' and data[i].dayincrease != ' ':
             sum0 += string.atof(data[i].dayincrease)

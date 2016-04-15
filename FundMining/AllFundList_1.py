@@ -276,6 +276,33 @@ def getPerfForFund(fund):
     print '  %s %s %.3f %s' % (fundurl, fundValueList[0].dayincrease, value, fund.name)
     #default action=0
 
+#Failed for not log in
+def getLatestIndexFromXueQiu():
+    indexurl = 'https://xueqiu.com/stock/quote.json?code=SH000001%2CSZ399001%2CSH000300%2CSZ399006'
+    re_strforindex = r'上证指数","current":"([.\d]+)","percentage":"([+-.\d]+)","change":"([+-.\d]+)","open".*' \
+                     r'"深证成指","current":"([.\d]+)","percentage":"([+-.\d]+)","change":"([+-.\d]+)","open".*' \
+                     r'"创业板指","current":"([.\d]+)","percentage":"([+-.\d]+)","change":"([+-.\d]+)","open"'
+    re_patforindex = re.compile(re_strforindex)
+    content = urllib2.urlopen(indexurl).read()
+    flist = re.findall(re_patforindex,content)
+    print "done"
+    #if len(flist) > 0:
+        #print "上指: %s %s %s   深指: %s %s %s 创指: %s %s %s" % (flist[0])
+
+#Get
+def getLatestIndex():
+    indexurl = 'http://hqdigi2.eastmoney.com/EM_Quote2010NumericApplication/Index.aspx?type=z&sortType=C&sortRule=-1&jsSort=1&jsName=quote_zy&ids=0000011,3990012,0003001,3990062'
+    re_strforindex = r'上证指数,([.\d]+),[,\d.]+,([+-.\d]+),([+-.\d]+)%,.*' \
+                     r'深证成指,([.\d]+),[,\d.]+,([+-.\d]+),([+-.\d]+)%,.*' \
+                     r'创业板指,([.\d]+),[,\d.]+,([+-.\d]+),([+-.\d]+)%,'
+    re_patforindex = re.compile(re_strforindex)
+    content = urllib2.urlopen(indexurl).read()
+    flist = re.findall(re_patforindex,content)
+    if len(flist) > 0:
+        print "  上指: %s %s %s%%" % (flist[0][0],flist[0][1],flist[0][1])
+        print "  深指: %s %s %s%%" % (flist[0][3],flist[0][4],flist[0][5])
+        print "  创指: %s %s %s%%" % (flist[0][6],flist[0][7],flist[0][8])
+
 #New analysis patterns
 
 @exeTime
@@ -374,7 +401,7 @@ checkdrop = False #check drop or increase
 myfundlist = ['377010','270005','110029','590008','163406','161810','519113','162010', '166011','530018','161810','161017','320010', '100038', '040016']
 upthreshold = 8
 downthreshould = -5
-deltadaysforaction = 10
+deltadaysforaction = 12
 etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=0)).strftime("%Y-%m-%d")
 
 #Main calls
@@ -385,6 +412,7 @@ listcontent = getFundList(filters, typeFilter)
 fundInfoList = parseFundList(listcontent, savecsvfile, filecsv, typeFilter)
 
 #Analysis based on defined pattern
+getLatestIndex()
 #pattern5(fundInfoList, threadNum, deltadays, checkdrop, topNum)
 pattern6(myfundlist)
 
