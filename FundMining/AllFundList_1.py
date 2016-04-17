@@ -299,9 +299,9 @@ def getLatestIndex():
     content = urllib2.urlopen(indexurl).read()
     flist = re.findall(re_patforindex,content)
     if len(flist) > 0:
-        print "  上指: %s %s %s%%" % (flist[0][0],flist[0][1],flist[0][1])
-        print "  深指: %s %s %s%%" % (flist[0][3],flist[0][4],flist[0][5])
         print "  创指: %s %s %s%%" % (flist[0][6],flist[0][7],flist[0][8])
+        print "  上指: %s %s %s%%" % (flist[0][0],flist[0][1],flist[0][2])
+        print "  深指: %s %s %s%%" % (flist[0][3],flist[0][4],flist[0][5])
 
 #New analysis patterns
 
