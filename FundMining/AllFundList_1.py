@@ -212,7 +212,8 @@ def getFundvalueHis(fund, days):
     for item in flist:
         dayfund = FundValue()
         dayfund.date = item[0]
-        if (fund.latestout == False and (todayDate in dayfund.date)):
+        #if start time is not today, no need to check estimated value
+        if (etimeforhis != todayDate or ( fund.latestout == False and (todayDate in dayfund.date))):
             fund.latestout = True
         dayfund.value = item[1]
         dayfund.oavalue = item[2]
@@ -232,6 +233,7 @@ def getFundvalueHis(fund, days):
     return fundValueList
 
 #Get estimated value for fund
+#Todo, double refer to estimated value from duomi together with eastmoney
 def getEstimatedValue(fundcode):
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     fundurl = fundlinkTemp % fundcode
@@ -298,10 +300,13 @@ def getLatestIndex():
     re_patforindex = re.compile(re_strforindex)
     content = urllib2.urlopen(indexurl).read()
     flist = re.findall(re_patforindex,content)
+    cz = string.atof(flist[0][6]) + string.atof(flist[0][7])
+    shz = string.atof(flist[0][0]) + string.atof(flist[0][1])
+    szz = string.atof(flist[0][3]) + string.atof(flist[0][4])
     if len(flist) > 0:
-        print "  创指: %s %s %s%%" % (flist[0][6],flist[0][7],flist[0][8])
-        print "  上指: %s %s %s%%" % (flist[0][0],flist[0][1],flist[0][2])
-        print "  深指: %s %s %s%%" % (flist[0][3],flist[0][4],flist[0][5])
+        print "  创指: %d %s %s%%" % (cz,flist[0][7],flist[0][8])
+        print "  上指: %d %s %s%%" % (shz,flist[0][1],flist[0][2])
+        print "  深指: %d %s %s%%" % (szz,flist[0][4],flist[0][5])
 
 #New analysis patterns
 
@@ -348,7 +353,7 @@ def pattern5(fundinfolist, threadnum, days, isdrop, topnum):
 #Self OTC fund
 def pattern6(fundcodelist):
     print 'Check delta for self selected fund, give buy/sell/noaction order'
-    print 'Strategy: increased 8% in passed m days(at most) then sell, or dropped 5% then buy, otherwise, no action'
+    print 'Strategy: increased %s%% in passed m days(at most) then sell, or dropped %s%% then buy, otherwise, no action' % (upthreshold, downthreshould)
 
     fundlist6 = []
     for fundcode in fundcodelist:
@@ -399,7 +404,7 @@ checkdrop = False #check drop or increase
 
 #parameter for pattern 6
 myfundlist = ['377010','270005','110029','590008','163406','161810','519113','162010', '166011','530018','161810','161017','320010', '100038', '040016']
-upthreshold = 8
+upthreshold = 7.5
 downthreshould = -5
 deltadaysforaction = 12
 etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=0)).strftime("%Y-%m-%d")
