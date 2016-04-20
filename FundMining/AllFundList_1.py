@@ -226,14 +226,17 @@ def getFundvalueHis(fund, days):
         week = int(time.strftime("%w"))
         if week <6 and week >0:
             dayfund = FundValue()
-            dayfund.dayincrease = getEstimatedValue(fund.fundcode)
+            es1 = getEstimatedValue(fund.fundcode) #eastmoney
+            es2 = getEstimatedValueFromShumi(fund.fundcode) #shumi
+            esaverage = 0.5*(es1+es2) #for now took half/half
+            print '  Estimated for %s: %s ' %(fund.fundcode, esaverage)
+            dayfund.dayincrease = esaverage
             dayfund.date = todayDate
             fundValueList.insert(0,dayfund) #should insert to 0 position
 
     return fundValueList
 
-#Get estimated value for fund
-#Todo, double refer to estimated value from duomi together with eastmoney
+#Get estimated value for fund from eastmoney
 def getEstimatedValue(fundcode):
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     fundurl = fundlinkTemp % fundcode
@@ -243,8 +246,21 @@ def getEstimatedValue(fundcode):
     content = urllib2.urlopen(fundurl).read()
     flist = re.findall(re_patforjjgz,content)
     if len(flist) > 0:
-        print '  Estimated for %s: %s ' %(fundcode, flist[0])
+        #print '  Estimated for %s: %s ' %(fundcode, flist[0])
         return string.atof(flist[0])
+    else:
+        return 0
+
+#Get estimated value for fund from Shumi
+def getEstimatedValueFromShumi(fundcode):
+    fundlinkTemp = 'http://hq.fund123.cn/jsdata/ev/%s.js?'
+    fundurl = fundlinkTemp % fundcode
+    re_strforjjgz = r';\d+ [\d.]+ ([-+.\d]+);'
+    re_patforjjgz = re.compile(re_strforjjgz)
+    content = urllib2.urlopen(fundurl).read()
+    flist = re.findall(re_patforjjgz,content)
+    if len(flist) > 0:
+        return string.atof(flist[len(flist)-1])
     else:
         return 0
 
