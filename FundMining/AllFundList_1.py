@@ -18,13 +18,18 @@ import datetime
 import BeautifulSoup
 import threadpool
 from FindMaxMinMFromN import*
+import smtplib
+from email.mime.text import MIMEText
 
+#global
 urlTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?' \
           'op=ph&dt=kf&ft=%s&rs=&gs=0&sc=zzf&st=desc&sd=%s&ed=%s&qdii=&tabSubtype=,,,,,&pi=1&pn=%s&dx=1'
 urlCtTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=fb&ft=ct&rs=&gs=0&sc=zzf&st=desc&pi=1&pn=1000'
 
 re_strforfund = r'(\"[^\"]+\"[,]?)'
 re_pat = re.compile(re_strforfund)
+
+emailcontentlist = []
 
 #Class for fund
 class Fund:
@@ -226,10 +231,15 @@ def getFundvalueHis(fund, days):
         week = int(time.strftime("%w"))
         if week <6 and week >0:
             dayfund = FundValue()
-            es1 = getEstimatedValue(fund.fundcode) #eastmoney
-            es2 = getEstimatedValueFromShumi(fund.fundcode) #shumi
-            esaverage = 0.5*(es1+es2) #for now took half/half
-            print '  Estimated for %s: %s ' %(fund.fundcode, esaverage)
+            es1 = getEstimatedValueFromEastmoney(fund.fundcode)
+            es2 = getEstimatedValueFromShumi(fund.fundcode)
+            esaverage = 0.85*es1+ 0.15*es2
+            eastmoneyinfo = '  Estimated for %s: %.3f by eastmoney' %(fund.fundcode, es1)
+            overallinfo =  '  Estimated for %s: %.3f ' %(fund.fundcode, esaverage)
+            emailcontentlist.append(eastmoneyinfo)
+            emailcontentlist.append(overallinfo)
+            print eastmoneyinfo
+            print overallinfo
             dayfund.dayincrease = esaverage
             dayfund.date = todayDate
             fundValueList.insert(0,dayfund) #should insert to 0 position
@@ -237,7 +247,7 @@ def getFundvalueHis(fund, days):
     return fundValueList
 
 #Get estimated value for fund from eastmoney
-def getEstimatedValue(fundcode):
+def getEstimatedValueFromEastmoney(fundcode):
     fundlinkTemp = 'http://fund.eastmoney.com/%s.html'
     fundurl = fundlinkTemp % fundcode
     #id="gz_gszzl">+1.31%</span
@@ -246,7 +256,7 @@ def getEstimatedValue(fundcode):
     content = urllib2.urlopen(fundurl).read()
     flist = re.findall(re_patforjjgz,content)
     if len(flist) > 0:
-        #print '  Estimated for %s: %s ' %(fundcode, flist[0])
+        #print '  Estimated for %s: %s by eastmoney' %(fundcode, flist[0])
         return string.atof(flist[0])
     else:
         return 0
@@ -291,7 +301,10 @@ def getPerfForFund(fund):
          value = GetMinFromM(fundValueList,deltadaysforaction)
          if value < downthreshould:
             fund.action = -1
-    print '  %s %s %.3f %s' % (fundurl, fundValueList[0].dayincrease, value, fund.name)
+
+    result = '  %s %s %.3f %s' % (fundurl, fundValueList[0].dayincrease, value, fund.name)
+    emailcontentlist.append(result)
+    print result
     #default action=0
 
 #Failed for not log in
@@ -320,9 +333,34 @@ def getLatestIndex():
     shz = string.atof(flist[0][0]) + string.atof(flist[0][1])
     szz = string.atof(flist[0][3]) + string.atof(flist[0][4])
     if len(flist) > 0:
-        print "  创指: %d %s %s%%" % (cz,flist[0][7],flist[0][8])
-        print "  上指: %d %s %s%%" % (shz,flist[0][1],flist[0][2])
-        print "  深指: %d %s %s%%" % (szz,flist[0][4],flist[0][5])
+        czinfo = "  创指: %d %s %s%%" % (cz,flist[0][7],flist[0][8])
+        shzinfo = "  上指: %d %s %s%%" % (shz,flist[0][1],flist[0][2])
+        szzinfo = "  深指: %d %s %s%%" % (szz,flist[0][4],flist[0][5])
+        emailcontentlist.append(czinfo)
+        emailcontentlist.append(shzinfo)
+        emailcontentlist.append(szzinfo)
+        print czinfo
+        print shzinfo
+        print szzinfo
+
+#Send email
+def send_mail(to_list, sub, content,mail_host, mail_user,  mail_pass):
+    me= "micerin" + "<"+mail_user+">"
+    #’utf-8‘ to handle coding issue for Chinese
+    msg = MIMEText(content,_subtype='plain', _charset='utf-8')#,_charset='gb2312')
+    msg['Subject'] = sub
+    msg['From'] = me
+    msg['To'] = ";".join(to_list)#to_list#
+    try:
+        server = smtplib.SMTP()
+        server.connect(mail_host)
+        server.login(mail_user,mail_pass)
+        server.sendmail(me, to_list, msg.as_string())
+        server.close()
+        return True
+    except Exception, e:
+        print str(e)
+        return False
 
 #New analysis patterns
 
@@ -386,13 +424,31 @@ def pattern6(fundcodelist):
     for fund in fundlist6:
         actionsum +=fund.action
 
+    outputinfo = ''
     #Strategy to sell or buy in under such unstable situation
     if actionsum > 2:
-        print 'ActionSum: %d for %d funds, Time To Sell Out!!!' % (actionsum, len(fundcodelist))
+        outputinfo =  'ActionSum: %d for %d funds, Time To Sell Out!!!' % (actionsum, len(fundcodelist))
     elif actionsum < -2:
-        print 'ActionSum: %d for %d funds, Good To Buy In!!!' % (actionsum, len(fundcodelist))
+        outputinfo = 'ActionSum: %d for %d funds, Good To Buy In!!!' % (actionsum, len(fundcodelist))
     else:
-        print 'ActionSum: %d for %d funds, No Valuable Action!!!' % (actionsum, len(fundcodelist))
+        outputinfo = 'ActionSum: %d for %d funds, No Valuable Action!!!' % (actionsum, len(fundcodelist))
+    print outputinfo
+    return outputinfo
+
+def DoPattern6AndSendEmail(sendmail):
+    del emailcontentlist[:]
+    eTime0 = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))
+    mailsubject = 'Daily Report - %s' % eTime0
+    emailcontentlist.append(mailsubject)
+    #Analysis based on defined pattern
+    getLatestIndex()
+    report = pattern6(myfundlist)
+    emailcontentlist.append(report)
+    delimiter = '\r\n'
+    content = delimiter.join(emailcontentlist)
+    #print content
+    if sendmail:
+        send_mail(mailto_list, mailsubject, content, mail_host, mail_user,mail_pass)
 
 @exeTime
 #In fund filter
@@ -401,7 +457,7 @@ def pattern7(fundcodelist):
 
 #Parameters
 #Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
-typeFilter = 'ct' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
+typeFilter = 'hh' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 #Get start and end date time
 sDate = datetime.datetime.now() - datetime.timedelta(days=365)
@@ -415,27 +471,57 @@ filecsv = 'funds.csv' #csv file name
 savecsvfile = False #Whether save csv file or not
 filters = (typeFilter, sTime, eTime, num)
 workingdays = 100 #fund history value check working days window
-deltadays = 10 #delta working days to check drop and increase max
+deltadays = 14 #delta working days to check drop and increase max
 checkdrop = False #check drop or increase
 
 #parameter for pattern 6
 myfundlist = ['377010','270005','110029','590008','163406','161810','519113','162010', '166011','530018','161810','161017','320010', '100038', '040016']
+# 377010 上投阿尔法 270005 广发聚丰 163406 兴全合润
 upthreshold = 7.5
 downthreshould = -5
 deltadaysforaction = 12
-etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=0)).strftime("%Y-%m-%d")
+daysearlier = 0
+etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=daysearlier)).strftime("%Y-%m-%d")
+
+#mail
+mailto_list=['micerin@163.com']
+mail_user=''
+mail_pass=''
+mail_host='smtp.163.com'
+mail_postfix='163.com'
 
 #Main calls
 print '-------Start Analysis-------'
-
 #Retrieve fund info list
 listcontent = getFundList(filters, typeFilter)
 fundInfoList = parseFundList(listcontent, savecsvfile, filecsv, typeFilter)
 
-#Analysis based on defined pattern
-getLatestIndex()
-#pattern5(fundInfoList, threadNum, deltadays, checkdrop, topNum)
-pattern6(myfundlist)
+#Ensure always check once if user tends to start for first time
+DoPattern6AndSendEmail(False)
+
+loopintervalmin = 10
+#loop every day
+while True:
+    etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=daysearlier)).strftime("%Y-%m-%d")
+    timenow = datetime.datetime.now()
+    week = int(time.strftime("%w"))
+    if week >= 6:
+        print 'No business day, sleep 3 hours!'
+        loopintervalmin = 3*60
+    elif (timenow.hour == 23) \
+            or (timenow.hour == 14 and timenow.minute >= 45 and timenow.minute <= 50):
+        DoPattern6AndSendEmail(True)
+        print 'sleep %s mins' % loopintervalmin
+    elif timenow.hour > 14 or timenow.hour < 9 or (timenow.hour == 8 and timenow.minute < 30):
+        print 'No business hour, sleep 1 hour!'
+        loopintervalmin = 60
+    else:
+        DoPattern6AndSendEmail(False)
+        loopintervalmin = 5
+        print 'sleep %s mins' % loopintervalmin
+
+    #print 'sleep %s mins' % loopintervalmin
+    time.sleep(loopintervalmin*60)
 
 print '-------Analysis Completed-------'
 
