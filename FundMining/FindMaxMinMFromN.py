@@ -1,5 +1,14 @@
 import string
 
+def GetSumForN(data, n):
+    sum = 0
+    if len(data) < n:
+        n = len(data)
+    for i in range(0,n-1):
+        if data[i].dayincrease != '' and data[i].dayincrease != ' ':
+            sum += string.atof(data[i].dayincrease)
+    return sum
+
 def GetMaxMFromN(data, m):
     max = -100000
     maxindex = -1
@@ -47,6 +56,54 @@ def GetMinFromM(data, m):
             if sum0 < min:
                 min = sum0
     return min
+
+def GetMaxFromEnd(data,n):
+    if n==2:
+        if data[0].dayincrease != '' and data[0].dayincrease != ' ' and data[1].dayincrease != '' and data[1].dayincrease != ' ':
+            data0 = string.atof(data[0].dayincrease)
+            data1 = string.atof(data[1].dayincrease)
+            delta0 =  data0 + data1
+            if  delta0 > 0:
+                return delta0
+            elif data0 > 0:
+                return data0
+            else:
+                return 0
+        else:
+            return 0
+
+    newdata = []
+    for i in range(0,n-1):
+        newdata.append(data[i+1])
+    delta = string.atof(data[0].dayincrease) + GetMaxFromEnd(newdata, n-1)
+    if delta > 0:
+        return delta
+    else:
+        return 0
+
+def GetMinFromEnd(data,n):
+    if n==2:
+        if data[0].dayincrease != '' and data[0].dayincrease != ' ' and data[1].dayincrease != '' and data[1].dayincrease != ' ':
+            data0 = string.atof(data[0].dayincrease)
+            data1 = string.atof(data[1].dayincrease)
+            delta0 =  data0 + data1
+            if  delta0 < 0:
+                return delta0
+            elif data0 <0:
+                return data0
+            else:
+                return 0
+        else:
+            return 0
+
+    newdata = []
+    for i in range(0,n-1):
+        newdata.append(data[i+1])
+    delta = string.atof(data[0].dayincrease) + GetMinFromEnd(newdata, n-1)
+    if delta < 0:
+        return delta
+    else:
+        return 0
 
 def SumReverse(data, index, m):
     sum = 0

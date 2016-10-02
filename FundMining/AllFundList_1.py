@@ -68,6 +68,7 @@ class FundValue:
         self.value = ''
         self.oavalue = ''
         self.dayincrease = ''
+        self.sumfordays = ''
 
 #Utility function to calculate func excution time
 def exeTime(func):
@@ -294,15 +295,18 @@ def getPerfForFund(fund):
     if len(fundValueList) <= 0:
         return
     if string.atof(fundValueList[0].dayincrease) > 0:
-        value = GetMaxFromM(fundValueList,deltadaysforaction)
+        #value = GetMaxFromM(fundValueList,deltadaysforaction)
+        value = GetMaxFromEnd(fundValueList,deltadaysforaction)#+1 need to handle if it's latest day
         if value > upthreshold:
             fund.action = 1
     elif string.atof(fundValueList[0].dayincrease) < 0:
-         value = GetMinFromM(fundValueList,deltadaysforaction)
+         #value = GetMinFromM(fundValueList,deltadaysforaction)
+         value = GetMinFromEnd(fundValueList,deltadaysforaction)
          if value < downthreshould:
             fund.action = -1
 
-    result = '  %s %s %.3f %s' % (fundurl, fundValueList[0].dayincrease, value, fund.name)
+    fundValueList[0].sumfordays = GetSumForN(fundValueList,deltadaysforaction)
+    result = '  %s %s  %.3f  %.3f' % (fundurl, fundValueList[0].dayincrease, value, fundValueList[0].sumfordays)
     emailcontentlist.append(result)
     print result
     #default action=0
@@ -471,15 +475,15 @@ filecsv = 'funds.csv' #csv file name
 savecsvfile = False #Whether save csv file or not
 filters = (typeFilter, sTime, eTime, num)
 workingdays = 100 #fund history value check working days window
-deltadays = 14 #delta working days to check drop and increase max
+deltadays = 10 #delta working days to check drop and increase max
 checkdrop = False #check drop or increase
 
 #parameter for pattern 6
 myfundlist = ['377010','270005','110029','590008','163406','161810','519113','162010', '166011','530018','161810','161017','320010', '100038', '040016']
-# 377010 上投阿尔法 270005 广发聚丰 163406 兴全合润
+# 377010 上投阿尔法, 270005 广发聚丰, 163406 兴全合润, 590008 中邮
 upthreshold = 7.5
 downthreshould = -5
-deltadaysforaction = 12
+deltadaysforaction = 10
 daysearlier = 0
 etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=daysearlier)).strftime("%Y-%m-%d")
 
