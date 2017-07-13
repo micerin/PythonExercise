@@ -488,7 +488,7 @@ daysearlier = 0
 etimeforhis = (datetime.datetime.now() - datetime.timedelta(days=daysearlier)).strftime("%Y-%m-%d")
 
 #mail
-mailto_list=['micerin@163.com']
+mailto_list=['micerin@163.com'] //email target
 mail_user=''
 mail_pass=''
 mail_host='smtp.163.com'
