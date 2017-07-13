@@ -15,7 +15,7 @@ import csv
 import string
 import time
 import datetime
-import BeautifulSoup
+from bs4 import BeautifulSoup
 import threadpool
 
 urlTemp = 'http://fund.eastmoney.com/data/rankhandler.aspx?' \
@@ -134,17 +134,20 @@ def getManagerPerf(funditem):
     jjjllinkTemp = 'http://fund.eastmoney.com/f10/jjjl_%s.html'
     jjjllink = jjjllinkTemp % funditem.fundcode
     i = 0
-    retrytimes= 10
+    retrytimes= 5
     for i in range(0,retrytimes):#retry 4 times at most since sometimes the page load return null result...
         # utf-8 or gb2312 or gbk
         try:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'))
+            soup = BeautifulSoup(urllib2.urlopen(jjjllink).read().decode('gb2312').encode('utf8'), "html.parser")
         except:
             try:
-                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'))
+                soup = BeautifulSoup(urllib2.urlopen(jjjllink).read().decode('gbk').encode('utf8'), "html.parser")
             except:
-                soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(jjjllink).read())
+                soup = BeautifulSoup(urllib2.urlopen(jjjllink).read(), "html.parser")
         table = soup.find('table', attrs={'class':'w782 comm jlchg'})
+        if table == None:
+            continue
+
         if len(table.contents[1].contents) > 0:
             funditem.managerperf = table.contents[1].contents[0].contents[4].contents[0][0:-1]
             funditem.managerduration = table.contents[1].contents[0].contents[3].contents[0]
@@ -152,7 +155,7 @@ def getManagerPerf(funditem):
             break
         i+=1
 
-    if i == retrytimes:#hit here after retrytimes times try, should indicate no manager change, get fromstartup
+    if i >= retrytimes-1:#hit here after retrytimes times try, should indicate no manager change, get fromstartup
         funditem.managerperf = funditem.fromstartup
         funditem.managerduration = 'start @' + funditem.starttime
         #funditem.managerperf = '0' #default 0
@@ -164,12 +167,12 @@ def isBuyable(fund):
     fundlink = fundlinkTemp % fund.fundcode
     # utf-8 or gb2312 or gbk
     try:
-        soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(fundlink).read())
+        soup = BeautifulSoup(urllib2.urlopen(fundlink).read(), "html.parser")
     except:
         try:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(fundlink).read().decode('gb2312').encode('utf8'))
+            soup = BeautifulSoup(urllib2.urlopen(fundlink).read().decode('gb2312').encode('utf8'), "html.parser")
         except:
-            soup = BeautifulSoup.BeautifulSOAP(urllib2.urlopen(fundlink).read().decode('gbk').encode('utf8'))
+            soup = BeautifulSoup(urllib2.urlopen(fundlink).read().decode('gbk').encode('utf8'), "html.parser")
     buyNow = soup.find(id='buyNowStatic')
 
     #<a id="buyNowStatic" class="buyNowStatic unbuy" href="javascript:;" target="_self">立即购买</a>
@@ -304,14 +307,14 @@ def pattern4(fundinfolist4, maxreturn, threadnum):
 
 #Parameters
 #Map -- gp=gupiao, hh=hunhe, zs=zhishu, zq=zhaiquan
-typeFilter = 'etf' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
+typeFilter = 'gp' # types allNum:2602,gpNum:469,hhNum:1174,zqNum:734,zsNum:344,bbNum:100,qdiiNum:94,etfNum:0,lofNum:147
 
 #Get start and end date time
 sDate = datetime.datetime.now() - datetime.timedelta(days = 365)
 sTime = sDate.strftime("%Y-%m-%d")
 eTime = time.strftime("%Y-%m-%d", time.localtime(int(time.time())))#'2016-04-03'
 
-num = 10000 #Max number fund to load(10000 for all funds)
+num = 300 #Max number fund to load(10000 for all funds)
 topNum = 30 #Top funds to print out
 threadNum = topNum #Number for multi-thread
 filecsv = 'funds.csv' #csv file name
